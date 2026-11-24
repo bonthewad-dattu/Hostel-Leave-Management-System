@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Search, ShieldCheck, UserRound } from 'lucide-react'
+import { Pencil, Plus, Search, ShieldCheck, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminNavbar from '../../components/AdminNavbar'
 import ConfirmModal from '../../components/ConfirmModal'
@@ -35,6 +35,10 @@ function ManageUsers() {
   const [saving, setSaving] = useState(false)
   const [userToDeactivate, setUserToDeactivate] = useState(null)
   const [updatingUser, setUpdatingUser] = useState(false)
+  const [userToEdit, setUserToEdit] = useState(null)
+  const [editFormData, setEditFormData] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -155,6 +159,78 @@ function ManageUsers() {
     }
   }
 
+  function startEditingUser(user) {
+    setUserToEdit(user)
+    setEditFormData({
+      name: user.name,
+      email: user.email,
+      rollNumber: user.rollNumber || '',
+      phoneNumber: user.phoneNumber || '',
+      hostelBlock: user.hostelBlock || '',
+    })
+    setEditError('')
+  }
+
+  async function handleEditSubmit(event) {
+    event.preventDefault()
+    if (!userToEdit || !editFormData) return
+
+    setEditError('')
+    const name = editFormData.name.trim()
+    const email = editFormData.email.trim().toLowerCase()
+    if (!name || !email) {
+      setEditError('Enter the user’s name and email address.')
+      return
+    }
+
+    const updates = { name, email }
+    if (userToEdit.role === 'student') {
+      const rollNumber = editFormData.rollNumber.trim().toUpperCase()
+      const phoneNumber = editFormData.phoneNumber.trim()
+      const hostelBlock = editFormData.hostelBlock.trim()
+      if (rollNumber !== (userToEdit.rollNumber || '')) {
+        if (!isValidCollegeRollNumber(rollNumber)) {
+          setEditError('Use the college roll number format 26A100.')
+          return
+        }
+        updates.rollNumber = rollNumber
+      }
+      if (phoneNumber !== (userToEdit.phoneNumber || '')) {
+        if (!isValidPhone(phoneNumber)) {
+          setEditError('Enter a valid 10-digit Indian mobile number.')
+          return
+        }
+        updates.phoneNumber = phoneNumber
+      }
+      if (hostelBlock !== (userToEdit.hostelBlock || '')) {
+        if (!hostelBlock) {
+          setEditError('Choose an active hostel block.')
+          return
+        }
+        updates.hostelBlock = hostelBlock
+      }
+    }
+
+    setSavingEdit(true)
+    try {
+      await updateUser(userToEdit.id, updates)
+      const result = await getUsers({
+        page,
+        limit: 20,
+        ...(roleFilter === 'All' ? {} : { role: roleFilter }),
+        ...(search.trim() ? { search: search.trim() } : {}),
+      })
+      setUsers(result.items)
+      setPagination(result.pagination)
+      setUserToEdit(null)
+      setEditFormData(null)
+    } catch (requestError) {
+      setEditError(requestError.message)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <AdminNavbar />
@@ -165,7 +241,7 @@ function ManageUsers() {
           <p className="text-xs font-semibold tracking-[0.16em] text-brand-600">ADMINISTRATION</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Manage users</h1>
           <p className="mt-2 text-sm text-slate-500">
-            Add accounts, filter by role, and update account status. Students have a hostel block; assign wardens to blocks in Manage Hostels. Administrators do not need a block.
+            Add accounts, correct profile details, and update account status. Students have a hostel block; assign wardens to blocks in Manage Hostels. Administrators do not need a block.
           </p>
         </div>
 
@@ -233,7 +309,7 @@ function ManageUsers() {
                     onChange={(event) => setFormData({ ...formData, rollNumber: event.target.value.toUpperCase() })}
                     placeholder="ex:26A100"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10"/>
-                  <p className="mt-1 text-xs text-slate-500">2- or 4-digit year, one letter, then a number starting at 100.</p>
+                  <p className="mt-1 text-xs text-slate-500">Use two year digits, one letter, and a three-digit number from 100 (for example, 26A100).</p>
                 </div>
 
 
@@ -407,6 +483,13 @@ function ManageUsers() {
 
                           <div className="flex items-center gap-2">
 
+                            <button
+                              type="button"
+                              onClick={() => startEditingUser(user)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline">
+                              <Pencil size={13} />
+                              Edit
+                            </button>
 
                             <button
                               type="button"
@@ -439,6 +522,110 @@ function ManageUsers() {
             }}/>
       </div>
       
+
+      {userToEdit && editFormData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-user-title"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="edit-user-title" className="text-xl font-semibold text-slate-900">
+              Edit {userToEdit.role} account
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Updating the email changes the address the user must enter to sign in.
+            </p>
+            <form onSubmit={handleEditSubmit} className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="edit-user-name" className="mb-1.5 block text-sm font-medium">Full name</label>
+                <input
+                  id="edit-user-name"
+                  required
+                  maxLength={120}
+                  value={editFormData.name}
+                  onChange={(event) => setEditFormData({ ...editFormData, name: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-email" className="mb-1.5 block text-sm font-medium">Email address</label>
+                <input
+                  id="edit-user-email"
+                  type="email"
+                  required
+                  maxLength={254}
+                  value={editFormData.email}
+                  onChange={(event) => setEditFormData({ ...editFormData, email: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                />
+              </div>
+              {userToEdit.role === 'student' && (
+                <>
+                  <div>
+                    <label htmlFor="edit-user-roll-number" className="mb-1.5 block text-sm font-medium">Roll number</label>
+                    <input
+                      id="edit-user-roll-number"
+                      maxLength={40}
+                      value={editFormData.rollNumber}
+                      onChange={(event) => setEditFormData({ ...editFormData, rollNumber: event.target.value.toUpperCase() })}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-user-phone-number" className="mb-1.5 block text-sm font-medium">Mobile number</label>
+                    <input
+                      id="edit-user-phone-number"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={editFormData.phoneNumber}
+                      onChange={(event) => setEditFormData({ ...editFormData, phoneNumber: event.target.value })}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-user-hostel" className="mb-1.5 block text-sm font-medium">Hostel block</label>
+                    <select
+                      id="edit-user-hostel"
+                      value={editFormData.hostelBlock}
+                      onChange={(event) => setEditFormData({ ...editFormData, hostelBlock: event.target.value })}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10">
+                      <option value="">Select a hostel block</option>
+                      {editFormData.hostelBlock && !hostels.some((hostel) => hostel.name === editFormData.hostelBlock) && (
+                        <option value={editFormData.hostelBlock}>{editFormData.hostelBlock}</option>
+                      )}
+                      {hostels.map((hostel) => (
+                        <option key={hostel.id} value={hostel.name}>{hostel.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+              {editError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{editError}</p>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={() => {
+                    setUserToEdit(null)
+                    setEditFormData(null)
+                    setEditError('')
+                  }}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {savingEdit ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       <ConfirmModal
         open={Boolean(userToDeactivate)}

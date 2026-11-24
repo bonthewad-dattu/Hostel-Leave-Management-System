@@ -7,6 +7,7 @@ API, and SQLite database.
 
 - Student registration, login, leave applications, request history, and pending-request edits/cancellations.
 - Student profiles show admission roll number, canonical hostel block, assigned warden, and a student-managed mobile number.
+- Administrators can edit user names, email addresses, and student profile details. Student roll numbers use the `26A100` format.
 - Warden review queues, comments, approval/rejection, and status history.
 - Admin management of users and hostels, leave reports, dashboard metrics, and request filters.
 - Role-protected API endpoints, server-side validation, and paginated leave lists.

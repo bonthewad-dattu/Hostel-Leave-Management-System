@@ -48,14 +48,17 @@ User-entered changes can be lost when the service resets.
 Create a Render Web Service with `backend` as its root directory, then use:
 
 - Build command: `pip install -r requirements.txt`
-- Start command: `python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
+- Start command: `python manage.py migrate && python manage.py seed_admin && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
 - Health check path: `/api/health`
 
-Set `DEBUG=False`, `DJANGO_SECRET_KEY`, `ALLOWED_HOSTS` to the backend's exact
-`onrender.com` hostname (without `https://`), `CLIENT_ORIGIN` to the frontend's
-`https://` URL. To test admin features, optionally create an initial admin
-using `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD`, then
-run `python manage.py seed_admin`.
+Set `DEBUG=False`, a long random `DJANGO_SECRET_KEY`, `ALLOWED_HOSTS` to the
+backend's exact `onrender.com` hostname (without `https://`), and
+`CLIENT_ORIGIN` to the frontend's `https://` URL. Set `SEED_ADMIN_NAME`,
+`SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` so the start command creates the
+initial administrator. The seed command is safe to run on later starts and
+does not overwrite an existing administrator. With `DEBUG=False`, the app
+requires `DJANGO_SECRET_KEY`, enables HTTPS redirects and secure cookies, and
+sets HSTS; the health-check endpoint is exempt from the redirect.
 
 Create a Render Static Site with `frontend` as its root directory, build command
 `npm ci && npm run build`, and publish directory `dist`. Set

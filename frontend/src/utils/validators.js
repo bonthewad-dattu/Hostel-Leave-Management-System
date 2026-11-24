@@ -8,7 +8,7 @@ export const isValidPhone = (phone) => {
 
 export const isValidCollegeRollNumber = (rollNumber) => {
   const normalized = String(rollNumber || '').trim().toUpperCase()
-  const match = normalized.match(/^(?:\d{2}|\d{4})[A-Z](\d{3,})$/)
+  const match = normalized.match(/^\d{2}[A-Z](\d{3})$/)
   return Boolean(match && Number(match[1]) >= 100)
 }
 

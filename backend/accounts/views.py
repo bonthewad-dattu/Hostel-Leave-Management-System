@@ -31,11 +31,34 @@ def _phone_error(phone_number):
     return None
 
 
-def _roll_number_error(roll_number):
-    match = re.fullmatch(r"(?:\d{2}|\d{4})[A-Z](\d{3,})", roll_number)
-    if not match or int(match.group(1)) < 100:
-        return "Use two or four year digits, one letter, then a number starting at 100 (for example, 26A100)."
+def _email_error(email):
+    try:
+        validate_email(email)
+    except DjangoValidationError:
+        return "Enter a valid email address."
+    if len(email) > 254:
+        return "Email must be 254 characters or fewer."
     return None
+
+
+def _roll_number_error(roll_number):
+    if not re.fullmatch(r"\d{2}[A-Z]\d{3}", roll_number):
+        return "Use two year digits, one letter, and three digits (for example, 26A100)."
+    if int(roll_number[-3:]) < 100:
+        return "The roll number sequence must start at 100 (for example, 26A100)."
+    return None
+
+
+def _roll_number_conflicts(roll_number, exclude_user_id=None):
+    queryset = User.objects.filter(
+        Q(roll_number__iexact=roll_number)
+        | Q(roll_number__iregex=rf"^\d{{2}}{re.escape(roll_number)}$")
+    )
+    if exclude_user_id:
+        queryset = queryset.exclude(pk=exclude_user_id)
+    if queryset.exists():
+        return True
+    return False
 
 
 def _positive_pagination(query_params):
@@ -65,12 +88,9 @@ def register(request):
 
     if not name or len(name) > 120:
         return Response({"error": "Name is required and must be 120 characters or fewer."}, status=400)
-    try:
-        validate_email(email)
-    except DjangoValidationError:
-        return Response({"error": "Enter a valid email address."}, status=400)
-    if len(email) > 254:
-        return Response({"error": "Email must be 254 characters or fewer."}, status=400)
+    email_error = _email_error(email)
+    if email_error:
+        return Response({"error": email_error}, status=400)
     if not isinstance(password, str) or len(password) < 8:
         return Response({"error": "Password must be at least 8 characters long."}, status=400)
     if role != "student":
@@ -86,7 +106,7 @@ def register(request):
     if phone_error:
         return Response({"error": phone_error}, status=400)
     hostel = find_active_hostel(hostel_block_input)
-    if User.objects.filter(email__iexact=email).exists() or User.objects.filter(roll_number__iexact=roll_number).exists():
+    if User.objects.filter(email__iexact=email).exists() or _roll_number_conflicts(roll_number):
         return Response({"error": "An account with this email or roll number already exists."}, status=409)
 
     user = User.objects.create_user(
@@ -149,10 +169,9 @@ def users(request):
         phone_number = str(data.get("phoneNumber", "")).strip()
         if not name or len(name) > 120:
             return Response({"error": "Name is required and must be 120 characters or fewer."}, status=400)
-        try:
-            validate_email(email)
-        except DjangoValidationError:
-            return Response({"error": "Enter a valid email address."}, status=400)
+        email_error = _email_error(email)
+        if email_error:
+            return Response({"error": email_error}, status=400)
         if role not in User.Role.values:
             return Response({"error": "Role must be student, warden, or admin."}, status=400)
         if not isinstance(password, str) or len(password) < 8:
@@ -173,7 +192,7 @@ def users(request):
             hostel = None
         if User.objects.filter(email__iexact=email).exists():
             return Response({"error": "An account with this email already exists."}, status=409)
-        if roll_number and User.objects.filter(roll_number__iexact=roll_number).exists():
+        if roll_number and _roll_number_conflicts(roll_number):
             return Response({"error": "An account with this roll number already exists."}, status=409)
         user = User.objects.create_user(
             email=email,
@@ -238,6 +257,7 @@ def user_detail(request, user_id):
 
     data = request.data
     name = str(data.get("name", user.name)).strip()
+    email = str(data.get("email", user.email)).strip().lower()
     role = data.get("role", user.role)
     roll_number = str(data.get("rollNumber", user.roll_number) or "").strip().upper()
     hostel_block_input = str(data.get("hostelBlock", user.hostel_block or "")).strip()
@@ -246,6 +266,11 @@ def user_detail(request, user_id):
     active = data.get("active", user.is_active)
     if not name or len(name) > 120:
         return Response({"error": "Name is required and must be 120 characters or fewer."}, status=400)
+    email_error = _email_error(email)
+    if email_error:
+        return Response({"error": email_error}, status=400)
+    if User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
+        return Response({"error": "An account with this email already exists."}, status=409)
     if role not in User.Role.values:
         return Response({"error": "Role must be student, warden, or admin."}, status=400)
     if not isinstance(active, bool):
@@ -273,9 +298,14 @@ def user_detail(request, user_id):
     else:
         hostel = None
         hostel_block = None
-    if roll_number and User.objects.filter(roll_number__iexact=roll_number).exclude(pk=user.pk).exists():
+    if (
+        role == User.Role.STUDENT
+        and roll_number != user.roll_number
+        and _roll_number_conflicts(roll_number, exclude_user_id=user.pk)
+    ):
         return Response({"error": "That roll number is already assigned."}, status=409)
     user.name = name
+    user.email = email
     user.role = role
     user.roll_number = roll_number if role == User.Role.STUDENT else None
     user.hostel_block = hostel_block

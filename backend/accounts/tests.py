@@ -28,7 +28,7 @@ class AuthenticationApiTests(APITestCase):
             "email": "student@example.com",
             "password": "valid-password-123",
             "role": "student",
-            "rollNumber": "2026A100",
+            "rollNumber": "26A100",
             "phoneNumber": "9876543210",
             "hostelBlock": "Block-A",
         })
@@ -66,12 +66,12 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["user"]["hostelBlock"], "New Block")
 
-    def test_roll_number_is_unique_without_requiring_a_fixed_format(self):
+    def test_roll_numbers_use_canonical_format_and_are_case_insensitive(self):
         first = self.client.post("/api/auth/register", {
             "name": "First Student",
             "email": "first@example.com",
             "password": "valid-password-123",
-            "rollNumber": "2026A100",
+            "rollNumber": "26A100",
             "phoneNumber": "9876543210",
             "hostelBlock": "Block A",
         })
@@ -79,22 +79,54 @@ class AuthenticationApiTests(APITestCase):
             "name": "Second Student",
             "email": "second@example.com",
             "password": "valid-password-123",
-            "rollNumber": "2026a100",
+            "rollNumber": "26a100",
             "phoneNumber": "9876543211",
             "hostelBlock": "Block A",
         })
-        other_format = self.client.post("/api/auth/register", {
+        another_roll_number = self.client.post("/api/auth/register", {
             "name": "Third Student",
             "email": "third@example.com",
             "password": "valid-password-123",
-            "rollNumber": "2026B100",
+            "rollNumber": "26B100",
             "phoneNumber": "9876543212",
             "hostelBlock": "Block A",
         })
 
         self.assertEqual(first.status_code, 201)
         self.assertEqual(duplicate.status_code, 409)
-        self.assertEqual(other_format.status_code, 201)
+        self.assertEqual(another_roll_number.status_code, 201)
+
+    def test_roll_number_rejects_legacy_four_digit_year_format(self):
+        response = self.client.post("/api/auth/register", {
+            "name": "Test Student",
+            "email": "student@example.com",
+            "password": "valid-password-123",
+            "rollNumber": "2026A100",
+            "phoneNumber": "9876543210",
+            "hostelBlock": "Block A",
+        })
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_roll_number_conflicts_with_equivalent_legacy_value(self):
+        User.objects.create_user(
+            email="legacy@example.com",
+            password="valid-password-123",
+            name="Legacy Student",
+            role=User.Role.STUDENT,
+            roll_number="2026A100",
+            hostel_block="Block A",
+        )
+        response = self.client.post("/api/auth/register", {
+            "name": "Test Student",
+            "email": "student@example.com",
+            "password": "valid-password-123",
+            "rollNumber": "26A100",
+            "phoneNumber": "9876543210",
+            "hostelBlock": "Block A",
+        })
+
+        self.assertEqual(response.status_code, 409)
 
     def test_student_can_update_phone_and_view_assigned_warden(self):
         student = User.objects.create_user(
@@ -136,7 +168,7 @@ class AuthenticationApiTests(APITestCase):
             "name": "Test Student",
             "email": "student@example.com",
             "password": "valid-password-123",
-            "rollNumber": "I26A1455",
+            "rollNumber": "26A99",
             "phoneNumber": "9876543210",
             "hostelBlock": "Block A",
         })
@@ -154,6 +186,63 @@ class AuthenticationApiTests(APITestCase):
             "hostelBlock": "Block A",
         })
         self.assertEqual(response.status_code, 403)
+
+
+class AdminUserUpdateApiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            email="admin@example.com",
+            password="valid-password-123",
+            name="Test Admin",
+            role=User.Role.ADMIN,
+        )
+        self.student = User.objects.create_user(
+            email="student@example.com",
+            password="valid-password-123",
+            name="Test Student",
+            role=User.Role.STUDENT,
+            roll_number="2026A100",
+            hostel_block="Block A",
+            phone_number="9876543210",
+        )
+        self.other_user = User.objects.create_user(
+            email="other@example.com",
+            password="valid-password-123",
+            name="Other User",
+            role=User.Role.WARDEN,
+        )
+        self.client.force_authenticate(self.admin)
+        self.url = f"/api/users/{self.student.id}"
+
+    def test_admin_can_update_user_email_and_other_details(self):
+        response = self.client.put(
+            self.url,
+            {"email": "Student.New@Example.com", "name": "Updated Student"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["email"], "student.new@example.com")
+        self.assertEqual(response.data["user"]["name"], "Updated Student")
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.email, "student.new@example.com")
+
+    def test_admin_cannot_set_an_invalid_or_duplicate_email(self):
+        invalid = self.client.put(
+            self.url,
+            {"email": "not-an-email"},
+            format="json",
+        )
+        duplicate = self.client.put(
+            self.url,
+            {"email": "OTHER@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(duplicate.status_code, 409)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.email, "student@example.com")
 
 
 class LeaveApiTests(APITestCase):

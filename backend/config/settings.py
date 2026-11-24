@@ -2,22 +2,29 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = (
-    os.getenv("DJANGO_SECRET_KEY")
-    or os.getenv("SECRET_KEY")
-    or "unsafe-local-development-key-change-before-deployment"
-)
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+configured_secret_key = os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY")
+if not DEBUG and not os.getenv("DJANGO_SECRET_KEY"):
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be configured when DEBUG=False.")
+SECRET_KEY = configured_secret_key or "unsafe-local-development-key-change-before-deployment-do-not-use"
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_REDIRECT_EXEMPT = [r"^api/health$"]
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000"))
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",
