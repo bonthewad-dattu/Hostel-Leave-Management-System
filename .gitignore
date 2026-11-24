@@ -1,0 +1,42 @@
+backend/.env
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+backend/.venv/
+backend/db.sqlite3
+backend/**/__pycache__/
+backend/*.py[cod]
+backend/node_modules/
+backend/data/
+backend/coverage/
+frontend/node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+backend/venv/
+
+# Django
+backend/db.sqlite3
+backend/staticfiles/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# React
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Build files
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
