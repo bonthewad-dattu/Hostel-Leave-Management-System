@@ -42,29 +42,26 @@ in `backend/data/` is kept untouched and is not automatically imported.
 
 This project uses SQLite only. On Render's free web service, the SQLite file is
 temporary and may be reset when the service spins down, restarts, or redeploys.
-The `seed_demo` command recreates sample accounts, a hostel, and sample leave
-requests on each backend start. User-entered changes can be lost when that
-happens.
+There are no pre-seeded demo accounts; register a new student account to test.
+User-entered changes can be lost when the service resets.
 
 Create a Render Web Service with `backend` as its root directory, then use:
 
 - Build command: `pip install -r requirements.txt`
-- Start command: `python manage.py migrate && python manage.py seed_demo && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
+- Start command: `python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
 - Health check path: `/api/health`
 
 Set `DEBUG=False`, `DJANGO_SECRET_KEY`, `ALLOWED_HOSTS` to the backend's exact
 `onrender.com` hostname (without `https://`), `CLIENT_ORIGIN` to the frontend's
-`https://` URL, and `DEMO_PASSWORD` to a private password of at least eight
-characters. The seeded
-admin, warden, and student demo accounts share `DEMO_PASSWORD`; their email
-addresses are printed by the command. Do not use real personal data or a
-password used anywhere else.
+`https://` URL. To test admin features, optionally create an initial admin
+using `SEED_ADMIN_NAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD`, then
+run `python manage.py seed_admin`.
 
 Create a Render Static Site with `frontend` as its root directory, build command
 `npm ci && npm run build`, and publish directory `dist`. Set
 `VITE_API_URL` to `https://<backend-hostname>/api` and add a rewrite from `/*`
-to `/index.html` for React Router routes. Do not set `DATABASE_URL`; the app
-uses SQLite.
+to `/index.html` for React Router routes. The app uses SQLite; no
+`DATABASE_URL` is needed.
 
 ## API
 
