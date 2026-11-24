@@ -1,8 +1,15 @@
+import os
 from datetime import date, timedelta
+from io import StringIO
+from unittest.mock import patch
 
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from hostels.models import Hostel
+from leaves.models import LeaveHistory, LeaveRequest
 
 from .models import User
 
@@ -192,3 +199,22 @@ class LeaveApiTests(APITestCase):
         self.client.post("/api/leaves", data, format="json")
         duplicate = self.client.post("/api/leaves", data, format="json")
         self.assertEqual(duplicate.status_code, 409)
+
+
+class DemoSeedCommandTests(TestCase):
+    def test_seed_demo_is_idempotent_and_creates_loginable_accounts(self):
+        with patch.dict(os.environ, {"DEMO_PASSWORD": "demo-password-123"}):
+            call_command("seed_demo", stdout=StringIO())
+            call_command("seed_demo", stdout=StringIO())
+
+        self.assertEqual(User.objects.count(), 4)
+        self.assertEqual(Hostel.objects.count(), 1)
+        self.assertEqual(LeaveRequest.objects.count(), 2)
+        self.assertEqual(LeaveHistory.objects.count(), 2)
+        student = User.objects.get(email="student1@demo.example.com")
+        self.assertTrue(student.check_password("demo-password-123"))
+
+    def test_seed_demo_requires_a_private_password(self):
+        with patch.dict(os.environ, {"DEMO_PASSWORD": ""}):
+            with self.assertRaises(CommandError):
+                call_command("seed_demo", stdout=StringIO())

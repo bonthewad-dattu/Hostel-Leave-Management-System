@@ -74,7 +74,10 @@ npm run build
 ## Deployment and submission
 
 Set a production `DJANGO_SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`, and
-`CLIENT_ORIGIN` in the backend environment. Set `VITE_API_URL` to the deployed
-API URL when building the frontend. Add the published application URL and any
-required demo or video links here when they are available; none are included
-yet.
+`CLIENT_ORIGIN` in the backend environment. For a demo deployment, the backend
+uses SQLite and Render's free service may reset its data after sleeping,
+restarting, or redeploying. The backend startup command reseeds fake demo data;
+user-entered changes are temporary. Configure `VITE_API_URL` to the deployed
+API URL when building the frontend. See [`backend/README.md`](./backend/README.md)
+for Render setup details. Add the published application URL and any required
+demo or video links here when they are available; none are included yet.
